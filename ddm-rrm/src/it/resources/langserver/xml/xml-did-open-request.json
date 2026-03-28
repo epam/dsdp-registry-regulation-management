@@ -1,0 +1,12 @@
+{
+  "jsonrpc":"2.0",
+  "method":"textDocument/didOpen",
+  "params":{
+    "textDocument":{
+      "uri":"file:///d%3A/file1671452399104.xml",
+      "version":2,
+      "text":"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n\r\n<databaseChangeLog\r\n  xmlns=\"http:\/\/www.liquibase.org\/xml\/ns\/dbchangelog\"\r\n  xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\"\r\n  xmlns:ext=\"http:\/\/www.liquibase.org\/xml\/ns\/dbchangelog-ext\"\r\n  xsi:schemaLocation=\"http:\/\/www.liquibase.org\/xml\/ns\/dbchangelog http:\/\/www.liquibase.org\/xml\/ns\/dbchangelog\/dbchangelog-4.2.xsd\r\n        http:\/\/www.liquibase.org\/xml\/ns\/dbchangelog-ext https:\/\/nexus-public-mdtu-ddm-edp-cicd.apps.cicd2.mdtu-ddm.projects.epam.com\/repository\/extensions\/com\/epam\/digital\/data\/platform\/liquibase-ext-schema\/latest\/liquibase-ext-schema-latest.xsd\">\r\n\r\n    <!-- placeholder for registry data model objects -->\r\n    <property  name=\"dbname\"  value=\"registry\"\/>\r\n\r\n    <changeSet author=\"registry owner\" id=\"sbs_list1234567\">\r\n        <createTable tableName=\"sbs_list7\" ext:historyFlag=\"true\">\r\n            <column name=\"id\" type=\"UUID\" defaultValueComputed=\"uuid_generate_v4()\">\r\n                <constraints nullable=\"false\" primaryKey=\"true\" unique=\"true\" primaryKeyName=\"st_sbs7_id\"\/>\r\n            <\/column>\r\n            <column name=\"name\" type=\"Text\"\/>\r\n        <\/createTable>\r\n    <\/changeSet>\r\n\r\n    <changeSet id=\"sbs_list_scw1234567\" author=\"registry owner\">\r\n        <ext:createSearchCondition name=\"sbs_list7\" limit=\"100\" readMode=\"async\">\r\n            <ext:table name=\"sbs_list7\" alias=\"s\">\r\n                <ext:column name=\"name\" sorting=\"asc\" searchType=\"startsWith\" \/>\r\n            <\/ext:table>\r\n        <\/ext:createSearchCondition>\r\n    <\/changeSet>\r\n<\/databaseChangeLog>",
+      "languageId": "1"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+rules:
+  - verbs:
+      - get
+      - list
+      - update
+      - create
+      - patch
+    apiGroups:
+      - '*'
+    resources:
+      - jobs
+      - secrets

@@ -1,0 +1,13 @@
+apiVersion: v2
+description: Helm chart for Java application/service deploying
+name: registry-regulation-management
+version: 1.9.10
+appVersion: 1.9.10-SNAPSHOT
+maintainers:
+  - name: OSD-DDM
+sources:
+  - https://github
+type: application
+keywords:
+  - Java
+home: https://www.epam.com

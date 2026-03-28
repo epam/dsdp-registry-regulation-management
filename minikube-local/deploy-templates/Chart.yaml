@@ -1,0 +1,4 @@
+apiVersion: v2
+description: Chart for deploying registry-regulation-management locally
+name: local-registry-regulation-management
+version: 1.9.9

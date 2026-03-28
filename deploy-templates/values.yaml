@@ -1,0 +1,222 @@
+nameOverride: ""
+dnsWildcard: ""
+clusterName: ""
+
+extraTrafficExcludeOutboundPorts: "5432,9000"
+
+
+global:
+  cicdTool:
+    name: tekton
+  deploymentMode: null
+  deploymentStrategy: Recreate
+  imagePullSecrets: []
+
+image:
+  pullPolicy: IfNotPresent
+  pullSecrets:
+    - regcred
+  repository: registry-regulation-management
+  tag: latest
+
+config:
+  server:
+    max-http-request-header-size: 32KB
+  socket:
+    message-size: 30000
+  cache:
+    names: dates,conflicts,latestRebase,catalog
+    spec: expireAfterAccess=1d
+
+  redash:
+    url: http://mock:5000
+
+  registryRegulationManagement:
+    dataModel:
+      tablesFilePath: data-model/createTables.xml
+    dataSource:
+      connectionTimeoutInMillis: 10000
+      publicSchema: public
+      registryDataBase: registry
+      registryDevDataBasePrefix: registry_dev_
+    retry:
+      dataModelContextCreatingDelay: 300000
+      headBranchCloningDelay: 300000
+    scheduled:
+      cleanObsoleteVersionContexts:
+        cron: '0 0 20 ? * *'
+        timezone: UTC
+      masterRepoRefresh:
+        cron: '0 */5 * ? * *'
+        timezone: UTC
+    subjectTableName: subject
+
+container:
+  extraEnvVar: ""
+  extraVolumeMounts: ""
+  extraVolumes: ""
+
+  livenessProbe: |
+    httpGet:
+      path: /actuator/health/liveness
+      port: {{ .Values.container.port }}
+      httpHeaders:
+        - name: X-B3-Sampled
+          value: "0"
+    failureThreshold: 1
+    initialDelaySeconds: 180
+    periodSeconds: 20
+    successThreshold: 1
+    timeoutSeconds: 5
+  port: 8080
+  readinessProbe: |
+    httpGet:
+      path: /actuator/health/readiness
+      port: {{ .Values.container.port }}
+      httpHeaders:
+        - name: X-B3-Sampled
+          value: "0"
+    failureThreshold: 30
+    initialDelaySeconds: 25
+    periodSeconds: 10
+    successThreshold: 1
+    timeoutSeconds: 1
+  resources:
+    limits: {}
+    requests: {}
+  securityContext:
+    runAsUser: 1001
+  startupProbe: ""
+
+# data service communication
+postgres:
+  database: "registry"
+  schemaName: "public"
+  databaseOverride: ""  # If name not <.Values.clusterName>-< .Release.Namespace >-< .Values.postgres.database >
+  integrationSecretName: "postgresql-connection-details"
+  appSecretName: "postgresql-app-secrets"
+  # optianoal parameters if secret does not include connection parameters
+  host: ""
+  port: ""
+
+s3:
+  bucketName: user-import
+  bucketNameOverride: ""  # if bucket is not <.Values.clusterName>-<.Release.Namespace>-user-import
+  host: ""  # MinIO host in format [address]:[port]/[address]
+  transportProtocol: "http"  # http/https - Java configuration wait for http/https
+  certSecretName: ""
+  certSecretKey: ""
+
+vault:
+  encryptionRole: registry-regulation-management-encryption-only-role
+  key: registry-regulation-management-encryption-key
+  url: http://mock:8200
+  enabled: false
+
+keycloak:
+  certificatesEndpoint: /protocol/openid-connect/certs
+  url: ""
+  #  Realm should be deprecated.
+  officerRealmName: "officer-portal"
+  realms:
+    admin: admin
+    officer: officer-portal
+# vcs
+vcs:
+  provider: gitlab
+  headBranch: main
+  repositoryDirectory: /var/lib/repos-data
+  secretName: ci-gitlab
+  gerrit:
+    url: http://gerrit:8080
+    basePath: /gerrit
+    repository: registry-regulations
+  gitlab:
+    url: ""  #  https://gitbud.epam.com
+    project: ""  #  amdd-azd/environments-regulations/adam-mmvp/registry-regulations
+
+
+# Deployment configuration
+automountServiceAccountToken: true
+
+affinity: {}
+
+dnsPolicy: ""
+
+replicas: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  fsGroup: 1001
+
+schedulerName: default-scheduler
+
+lifecycleHooks: {}
+
+terminationGracePeriodSeconds: 30
+
+tolerations: {}
+
+nodeSelector: {}
+
+initContainers: ""
+#  - name: setup-permissions
+#    image: "{{ .Values.image.name }}:{{ .Values.image.version }}"
+#    command: ["sh", "-c", "chown -R 1001:1001 {{ .Values.vcs.repositoryDirectory }}"]
+#    volumeMounts:
+#      - name: repositories-data
+#        mountPath: {{ .Values.vcs.repositoryDirectory }}
+#    securityContext:
+#      runAsUser: 0
+
+
+istio:
+  sidecar:
+    enabled: true
+    requestsLimitsEnabled: true
+    resources:
+      limits: {}
+      requests: {}
+
+
+persistence:
+  storageClass: ""
+  volume:
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
+
+ingress:
+  enabled: true
+  ingressClassName: ""
+
+scheduled:
+  repositoryRefreshCron: '0 */5 * ? * *'
+  repositoryRefreshTimezone: UTC
+
+service:
+  nodePort: ""
+  port: 8080
+  type: ClusterIP
+
+serviceAccount:
+  create: true
+  name: registry-regulation-management
+
+serviceMonitor:
+  enabled: false
+  interval: 15s
+  scrapePath: /actuator/prometheus
+  kiali:
+    enabled: false
+    interval: 15s
+    scrapePath: /stats/prometheus
+    port: 15090
+
+userImport:
+  accessTokenSecretName: user-import-access-token
+  jobName: publish-users-job
+
+otelExporter:
+  endpoint: "http://jaeger-collector.opentelemetry-operator:4318/v1/traces"

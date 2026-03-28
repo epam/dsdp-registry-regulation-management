@@ -1,0 +1,208 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  annotations:
+    configmap.reloader.stakater.com/reload: '{{ include "registry-regulation-management.name" . }}'
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      {{- include "registry-regulation-management.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: {{ .Values.global.deploymentStrategy | default "Recreate" }}
+  template:
+    metadata:
+      annotations:
+        {{- if .Values.istio.sidecar.enabled }}
+        sidecar.istio.io/inject: "true"
+        traffic.sidecar.istio.io/excludeOutboundPorts: {{ .Values.extraTrafficExcludeOutboundPorts | squote }}
+        {{- if .Values.istio.sidecar.requestsLimitsEnabled }}
+          {{- include "registry-regulation-management.istioResources" . | nindent 8 }}
+        {{- else }}
+        inject.istio.io/templates: 'sidecar,emptyRequestsLimits'
+        {{- end }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+          {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "registry-regulation-management.labels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "registry-regulation-management.serviceAccountName" . }}
+      {{- if .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.global.imagePullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- else if .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- range .Values.image.pullSecrets }}
+        - name: {{ . }}
+        {{- end }}
+      {{- end }}
+      automountServiceAccountToken: {{ .Values.automountServiceAccountToken }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      schedulerName: {{ .Values.schedulerName }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      dnsPolicy: {{ .Values.dnsPolicy | default "ClusterFirst" }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- if .Values.initContainers }}
+      {{- with .Values.initContainers }}
+      initContainers:
+        {{- tpl . $ | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      containers:
+        - name: {{ include "registry-regulation-management.name" . }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.lifecycleHooks }}
+          lifecycle:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.container.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+          {{- with .Values.container.extraEnvVars }}
+            {{- tpl . $ | nindent 12 }}
+          {{- end }}
+            - name: DB_HOST
+            {{- if .Values.postgres.host }}
+              value: {{ .Values.postgres.host }}
+            {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.integrationSecretName }}
+                  key: address
+            {{- end }}
+            - name: DB_PORT
+            {{- if .Values.postgres.port }}
+              value: {{ .Values.postgres.port  | squote }}
+            {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.postgres.integrationSecretName }}
+                  key: port
+            {{- end }}
+            - name: DB_NAME
+              value: {{ include "database.name" . }}
+            - name: DB_SCHEMA
+              value: {{ .Values.postgres.schemaName }}
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  key: regRegulationRoleName
+                  name: {{ .Values.postgres.appSecretName }}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: regRegulationRolePass
+                  name: {{ .Values.postgres.appSecretName }}
+            - name: USER_IMPORT_CEPH_BUCKET_NAME
+              value: {{ include "s3.bucketName" . }}
+            - name: S3_HOST
+              value: {{ .Values.s3.host }}
+            - name: S3_TRANSPORT_PROTOCOL
+              value: {{ .Values.s3.transportProtocol }}
+            {{- if eq .Values.s3.transportProtocol "https" }}
+            - name: AWS_CA_BUNDLE
+              value: "/certs/public.crt"
+            {{- end }}
+            - name: OPENSHIFT_NAMESPACE
+              value: {{ .Release.Namespace }}
+            - name: OPENSHIFT_JOB
+              value: {{ .Values.userImport.jobName }}
+            - name: VAULT_ENABLED
+              value: {{ .Values.vault.enabled | quote }}
+            - name: VAULT_URI
+              value: {{ .Values.vault.url }}
+            - name: VAULT_KEY
+              value: {{ .Values.vault.key }}
+            - name: VAULT_ENCRYPTION_ROLE
+              value: {{ .Values.vault.encryptionRole }}
+            - name: KEYCLOAK_REALM
+              value: "{{ include "keycloak.officerRealm" . }}"
+            - name: REDASH_URL
+              value: {{ .Values.config.redash.url }}
+            - name: SPRING_CLOUD_BOOTSTRAP_ENABLED
+              value: 'true'
+            - name: GITLAB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  key: token
+                  name: {{ .Values.vcs.secretName }}
+
+          envFrom:
+            - secretRef:
+                name: {{ .Values.s3.bucketName }}
+          {{- with .Values.container.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: api
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
+          {{- with .Values.container.startupProbe }}
+          startupProbe:
+            {{- tpl . $ | nindent 12 }}
+          {{- end }}
+          {{- with .Values.container.livenessProbe }}
+          livenessProbe:
+            {{- tpl . $ | nindent 12 }}
+          {{- end }}
+          {{- with .Values.container.readinessProbe }}
+          readinessProbe:
+            {{- tpl . $ | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            {{- with .Values.container.extraVolumeMounts }}
+              {{- tpl . $ | nindent 12 }}
+            {{- end }}
+            - mountPath: /app/config/config.yaml
+              name: config
+              readOnly: true
+              subPath: config.yaml
+            - mountPath: /var/lib/repos-data
+              name: repositories-data
+            {{- if eq .Values.s3.transportProtocol "https" }}
+            - name: minio-cert-secret-vol
+              mountPath: /certs
+            {{- end }}
+      volumes:
+        {{- with .Values.container.extraVolumes }}
+          {{- tpl . $ | nindent 8 }}
+        {{- end }}
+        - name: repositories-data
+          emptyDir: {}
+        - name: config
+          configMap:
+            name: {{ include "registry-regulation-management.name" . }}
+        {{- if eq .Values.s3.transportProtocol "https" }}
+        - name: minio-cert-secret-vol
+          secret:
+            secretName: {{ .Values.s3.certSecretName }}
+            items:
+              - key: {{ .Values.s3.certSecretKey }}
+                path: public.crt
+        {{- end }}

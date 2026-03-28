@@ -1,0 +1,68 @@
+{{ $gerritService :=  lookup "v1" "Service" .Release.Namespace "gerrit-service"}}
+{{- if or (not $gerritService) (eq (index $gerritService.metadata.annotations "meta.helm.sh/release-name") "registry-regulation-management-local") -}}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: gerrit-git
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi
+  storageClassName: standard
+  volumeMode: Filesystem
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: gerrit
+  name: gerrit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gerrit
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: gerrit
+    spec:
+      containers:
+        - image: gerritcodereview/gerrit:3.7.8
+          name: gerrit
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 29418
+              protocol: TCP
+          resources: { }
+          volumeMounts:
+            - mountPath: /var/gerrit/git
+              name: gerrit-git
+      restartPolicy: Always
+      volumes:
+        - name: gerrit-git
+          persistentVolumeClaim:
+            claimName: gerrit-git
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: gerrit
+  name: gerrit-service
+spec:
+  ports:
+    - name: java-port
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: gerrit
+{{- end -}}

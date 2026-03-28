@@ -1,0 +1,15 @@
+{
+   "jsonrpc":"2.0",
+   "method":"textDocument/didChange",
+   "params":{
+      "textDocument":{
+         "uri":"file:///d%3A/file1671452399104.groovy",
+         "version":2
+      },
+      "contentChanges":[
+         {
+            "text":"class App {static void main(String [] args) {printlnd \"Hello World. Groovy\"}}"
+         }
+      ]
+   }
+}

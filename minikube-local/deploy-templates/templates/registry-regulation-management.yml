@@ -1,0 +1,274 @@
+{{ $registryDbService :=  lookup "v1" "Service" .Release.Namespace "registry-db-service"}}
+{{- if or (not $registryDbService) (eq (index $registryDbService.metadata.annotations "meta.helm.sh/release-name") "registry-regulation-management-local") -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-db
+data:
+  create-multiple-postgresql-databases.sh: |-
+    #!/bin/bash
+
+    set -e
+    set -u
+
+    function create_database() {
+    	local database=$1
+    	echo "  Creating database '$database'"
+    	psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+    	    CREATE DATABASE $database;
+    EOSQL
+    }
+
+    if [ -n "$POSTGRES_MULTIPLE_DATABASES" ]; then
+    	echo "Multiple database creation requested: $POSTGRES_MULTIPLE_DATABASES"
+    	for db in $(echo $POSTGRES_MULTIPLE_DATABASES | tr ',' ' '); do
+    		create_database $db
+    	done
+    	echo "Multiple databases created"
+    fi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: registry-db
+  name: registry-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-db
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: registry-db
+    spec:
+      containers:
+        - image: postgres:17.7
+          name: bpm-db
+          ports:
+            - containerPort: 5432
+              protocol: TCP
+          resources: { }
+          env:
+            - name: POSTGRES_MULTIPLE_DATABASES
+              value: registry,public
+            - name: POSTGRES_USER
+              value: postgres
+            - name: POSTGRES_PASSWORD
+              value: password
+          volumeMounts:
+            - mountPath: /docker-entrypoint-initdb.d
+              name: registry-db-config
+      restartPolicy: Always
+      volumes:
+        - name: registry-db-config
+          configMap:
+            name: registry-db
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: registry-db
+  name: registry-db
+spec:
+  ports:
+    - name: java-port
+      port: 5432
+      targetPort: 5432
+  selector:
+    app: registry-db
+---
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: registry-regulation-management
+data:
+  config.yaml: |-
+    spring:
+      servlet:
+        multipart:
+          max-file-size: 30MB
+          max-request-size: 30MB
+      jackson:
+        deserialization:
+          fail-on-missing-creator-properties: true
+          fail-on-null-creator-properties: true
+      liquibase:
+        enabled: false
+      registry-datasource:
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://registry-db:5432/registry
+        username: postgres
+        password: password
+      public-datasource:
+        driver-class-name: org.postgresql.Driver
+        jdbc-url: jdbc:postgresql://registry-db:5432/public
+        username: postgres
+        password: password
+      cache:
+        cache-names: dates,conflicts,latestRebase,catalog
+        caffeine:
+          spec: expireAfterAccess=1d
+
+    hibernate:
+      dialect: org.hibernate.dialect.H2Dialect
+
+    platform:
+      security:
+        enabled: false
+
+    user-import-ceph:
+      http-endpoint: http://localhost:4566
+      access-key: access-key
+      secret-key: secret-key
+      bucket: bucket
+
+    s3:
+      config:
+        client:
+          protocol: http
+          signerOverride: S3SignerType
+        options:
+          pathStyleAccess: true
+
+    logging:
+      level:
+        root: INFO
+        org.zalando.logbook: TRACE
+      config: classpath:log4j2-local-console.xml
+
+    openshift:
+      namespace: test
+      job:
+        name: test
+
+    keycloak:
+      realm: test-realm
+
+    file-validator:
+      encoding: UTF-8
+      extension: csv
+
+    vault:
+      key: key
+
+    gerrit:
+      url: http://gerrit-service:8080
+      repository: registry-regulations
+      repository-directory: /var/lib/repos-data
+      user: admin
+      password: secret
+      head-branch: master
+
+    registry-regulation-management:
+      retry:
+        head-branch-cloning-delay: 300000
+        data-model-context-creating-delay: 300000
+      data-source:
+        driver-class-name: org.postgresql.Driver
+        base-jdbc-url: jdbc:postgresql://registry-db:5432
+        username: postgres
+        password: password
+        registry-data-base: registry
+        registry-dev-data-base-prefix: registry_dev_
+        connection-timeout-in-millis: 10000
+      scheduled:
+        clean-obsolete-version-contexts:
+          cron: '0 0 20 ? * *'
+          timezone: UTC
+        version-candidate-repo-refresh:
+          cron: '0 */5 * ? * *'
+          timezone: UTC
+        master-repo-refresh:
+          cron: '0 */5 * ? * *'
+          timezone: UTC
+      schema-crawler:
+        schema: ${DB_SCHEMA:registry}
+        exclude-tables:
+          - registry.databasechangelog
+          - registry.databasechangeloglock
+        exclude-table-prefixes: ddm,test
+        exclude-table-suffixes: hst
+        exclude-field-prefixes: ddm,dcm
+
+    user:
+      accessToken: accessToken
+
+    kubernetes.namespace.current: ${KUBERNETES_NAMESPACE_CURRENT}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: registry-regulation-management
+  name: registry-regulation-management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry-regulation-management
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: registry-regulation-management
+    spec:
+      containers:
+        - env:
+            - name: JAVA_OPTS
+              value: -Dspring.profiles.active=minikube -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+            - name: KUBERNETES_NAMESPACE_CURRENT
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: metadata.namespace
+            - name: SPRING_CLOUD_BOOTSTRAP_ENABLED
+              value: 'true'
+          image: registry-regulation-management
+          imagePullPolicy: Never
+          name: registry-regulation-management
+          ports:
+            - containerPort: 8080
+              protocol: TCP
+            - containerPort: 5005
+              protocol: TCP
+          resources: { }
+          volumeMounts:
+            - mountPath: /app/config
+              name: registry-regulation-management-config
+            - mountPath: /var/lib/repos-data
+              name: repos-data
+      restartPolicy: Always
+      volumes:
+        - name: registry-regulation-management-config
+          configMap:
+            name: registry-regulation-management
+        - name: repos-data
+          emptyDir:
+            sizeLimit: 500Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: registry-regulation-management
+  name: registry-regulation-management-service
+spec:
+  ports:
+    - name: java-port
+      port: 8080
+      targetPort: 8080
+  selector:
+    app: registry-regulation-management

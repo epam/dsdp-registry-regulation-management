@@ -1,0 +1,15 @@
+{
+   "jsonrpc":"2.0",
+   "method":"textDocument/didChange",
+   "params":{
+      "textDocument":{
+         "uri":"file:///d%3A/file1671452399104.groovy",
+         "version":2
+      },
+      "contentChanges":[
+         {
+            "text":"def cephData = [:]\\n['name', 'edrpou'].each {\\n  cephData[it] = labResponse.responseBody.prop(it).stringValue()\\n}\\nexecution.removeVariable('payload')\\nset_transient_variable('payload', S(cephData, 'application/json'))\\ndef fullName = initiator().fullName\\nif (fullName == null) {\\n  fullName = completer('Activity_shared-subject-status-error').fullName\\n}\\nexecution.setVariable('fullName', fullName"
+         }
+      ]
+   }
+}

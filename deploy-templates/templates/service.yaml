@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: api
+      {{- if .Values.service.type }}
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePort }}
+      {{- end }}
+      {{- end }}
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.container.port }}
+  selector:
+    {{- include "registry-regulation-management.selectorLabels" . | nindent 4 }}
+  type: {{ default "ClusterIP" (.Values.service.type | quote) }}

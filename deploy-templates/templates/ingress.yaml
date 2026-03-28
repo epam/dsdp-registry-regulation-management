@@ -1,0 +1,24 @@
+{{- if and (.Values.ingress.enabled) (eq .Values.global.deploymentMode "development") }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.ingress.ingressClassName }}
+  ingressClassName: {{ .Values.ingress.ingressClassName }}
+  {{- end }}
+  rules:
+    - host: {{ printf "%s-%s.%s" .Release.Name .Release.Namespace .Values.dnsWildcard }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "registry-regulation-management.name" . }}
+                port:
+                  name: api
+{{- end }}

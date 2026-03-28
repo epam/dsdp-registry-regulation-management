@@ -1,0 +1,17 @@
+apiVersion: security.istio.io/v1beta1
+kind: RequestAuthentication
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "registry-regulation-management.selectorLabels" . | nindent 6 }}
+  jwtRules:
+    - forwardOriginalToken: true
+      fromHeaders:
+        - name: X-Access-Token
+      issuer: {{ include "issuer.admin" . }}
+      jwksUri: {{ include "jwksUri.admin" . }}

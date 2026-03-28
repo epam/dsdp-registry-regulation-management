@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "registry-regulation-management.labels" . | nindent 4 }}
+data:
+  config.yaml: |-
+    spring:
+      {{- if eq .Values.s3.transportProtocol "https" }}
+      ssl:
+        bundle:
+          pem:
+            aws-ceph:
+              truststore:
+                certificate: ${AWS_CA_BUNDLE:}
+      {{- end }}
+      registry-datasource:
+        jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}?ApplicationName={{ include "registry-regulation-management.name" . }}${DB_URL_PROPERTIES}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+      public-datasource:
+        jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_SCHEMA}?ApplicationName={{ include "registry-regulation-management.name" . }}${DB_URL_PROPERTIES}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+      cache:
+        cache-names: {{ .Values.config.cache.names }}
+        caffeine:
+          spec: {{ .Values.config.cache.spec }}
+
+    server: {{ .Values.config.server | toYaml | nindent 6 }}
+
+    {{- if eq .Values.global.deploymentMode "development" }}
+    cors:
+     allowed-origin-patterns: '*'
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: '*'
+    {{- else }}
+    cors:
+      allowed-origin-patterns: '{{ include "admin-tools.url" . }}'
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: 'health, prometheus, prometheus-text'
+    {{- end }}
+      otlp:
+        tracing:
+          endpoint: {{ .Values.otelExporter.endpoint }}
+
+    socket: {{ .Values.config.socket | toYaml | nindent 6 }}
+
+    s3:
+      config:
+        client:
+          protocol: {{ .Values.s3.transportProtocol }}
+        options:
+          pathStyleAccess: true
+
+    user-import-ceph:
+      http-endpoint: ${S3_HOST}
+      bucketName: ${USER_IMPORT_CEPH_BUCKET_NAME}
+      access-key: ${AWS_ACCESS_KEY_ID}
+      secret-key: ${AWS_SECRET_ACCESS_KEY}
+
+    data:
+      jobName: {{ .Values.userImport.jobName }}
+    
+    user:
+      accessToken: "mock"
+
+    vcs:
+      provider: {{ .Values.vcs.provider }}
+      headBranch: {{ .Values.vcs.headBranch }}
+      repositoryDirectory: {{ .Values.vcs.repositoryDirectory }}
+      gerrit:
+        url: {{ include "gerrit.url" . }}
+        repository: {{ .Values.vcs.gerrit.repository }}
+        user: non-used-user
+        password: non-used-password
+      gitlab:
+        url: {{ .Values.vcs.gitlab.url }}
+        project: {{ .Values.vcs.gitlab.project }}
+        token: ${GITLAB_TOKEN}
+
+    registry-regulation-management:
+      retry:
+        head-branch-cloning-delay: {{ .Values.config.registryRegulationManagement.retry.headBranchCloningDelay }}
+        data-model-context-creating-delay: {{ .Values.config.registryRegulationManagement.retry.dataModelContextCreatingDelay }}
+      data-source:
+        driver-class-name: org.postgresql.Driver
+        base-jdbc-url: jdbc:postgresql://${DB_HOST}:${DB_PORT}
+        registry-data-base: {{ .Values.config.registryRegulationManagement.dataSource.registryDataBase }}
+        registry-dev-data-base-prefix: {{ .Values.config.registryRegulationManagement.dataSource.registryDevDataBasePrefix }}
+        connection-timeout-in-millis: {{ .Values.config.registryRegulationManagement.dataSource.connectionTimeoutInMillis }}
+        username: ${DB_USERNAME}
+        password: ${DB_PASSWORD}
+      subject-table-name: {{ .Values.config.registryRegulationManagement.subjectTableName }}
+      scheduled:
+        clean-obsolete-version-contexts:
+          cron: {{ .Values.config.registryRegulationManagement.scheduled.cleanObsoleteVersionContexts.cron }}
+          timezone: {{ .Values.config.registryRegulationManagement.scheduled.cleanObsoleteVersionContexts.timezone }}
+        version-candidate-repo-refresh:
+          cron: {{ .Values.scheduled.repositoryRefreshCron }}
+          timezone: {{ .Values.scheduled.repositoryRefreshTimezone }}
+        master-repo-refresh:
+          cron: {{ .Values.config.registryRegulationManagement.scheduled.masterRepoRefresh.cron }}
+          timezone: {{ .Values.config.registryRegulationManagement.scheduled.masterRepoRefresh.timezone }}
+      data-model:
+        tables-file-path: {{ .Values.config.registryRegulationManagement.dataModel.tablesFilePath }}
+
+
+    cicd:
+      tool: {{ .Values.global.cicdTool.name }}
+      pipe-name: {{ .Values.vcs.gerrit.repository }}

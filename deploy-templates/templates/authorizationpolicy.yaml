@@ -1,0 +1,24 @@
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ include "registry-regulation-management.name" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{ include "registry-regulation-management.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{ include "registry-regulation-management.selectorLabels" . | nindent 6 }}
+  rules:
+    - from:
+        - source:
+            notRequestPrincipals:
+              - '*'
+      to:
+        - operation:
+            notPaths:
+              - /actuator*
+              - /openapi
+              - /swagger-ui/*
+              - /v3*
+  action: DENY
