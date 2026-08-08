@@ -88,7 +88,7 @@
     <cyclonedx-maven-plugin.version>2.7.10</cyclonedx-maven-plugin.version>
     <apache.tika.version>3.2.2</apache.tika.version>
     <commons-compress.version>1.28.0</commons-compress.version>
-    <jsoap.version>1.17.2</jsoap.version>
+    <jsoap.version>1.23.1</jsoap.version>
     <commons-io.version>2.16.0</commons-io.version>
     <guava.version>33.1.0-jre</guava.version>
     <postgresql.version>42.7.9</postgresql.version>
